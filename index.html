@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>TAABE Skynet</title>
+	<script src="//ajax.googleapis.com/ajax/libs/angularjs/1.5.3/angular.min.js"></script>
+	<script src="//ajax.googleapis.com/ajax/libs/angularjs/1.5.3/angular-animate.min.js"></script>
+	<script src="//ajax.googleapis.com/ajax/libs/angularjs/1.5.3/angular-aria.min.js"></script>
+	<script src="//ajax.googleapis.com/ajax/libs/angularjs/1.5.3/angular-messages.min.js"></script>
+	<script src="//ajax.googleapis.com/ajax/libs/angularjs/1.5.3/angular-sanitize.min.js"></script>
+	<script src="//ajax.googleapis.com/ajax/libs/angularjs/1.5.3/angular-route.min.js"></script>
+	<script src="//cdnjs.cloudflare.com/ajax/libs/ngStorage/0.3.10/ngStorage.min.js"></script>
+	<link rel="stylesheet" href="//fonts.googleapis.com/css?family=Roboto:300,400,500,700">
+	<link rel="stylesheet" href="//fonts.googleapis.com/icon?family=Material+Icons">
+	<script src="//ajax.googleapis.com/ajax/libs/angular_material/1.0.5/angular-material.min.js"></script>
+	<link rel="stylesheet" href="//ajax.googleapis.com/ajax/libs/angular_material/1.0.5/angular-material.min.css">
+	<link rel="stylesheet" href="skynet.css">
+	<script src="skynet.js"></script>
+</head>
+<body ng-app="skynet">
+<md-toolbar class="md-toolbar-tools" ng-controller="toolbar">
+	<h1>TAABE Skynet</h1>
+	<md-progress-circular md-mode="indeterminate" class="md-accent md-shrink" ng-controller="loadingIndicator" ng-show="loading.loading"></md-progress-circular>
+	<span flex></span>
+	<md-menu class="md-shrink" ng-controller="sortMenu" ng-show="sort.currentCategory">
+		<md-button class="md-accent md-raised md-icon-button" ng-click="$mdOpenMenu($event)">
+			<md-tooltip md-direction="bottom">Sort by</md-tooltip>
+			<md-icon md-menu-origin>sort</md-icon>
+		</md-button>
+		<md-menu-content>
+			<md-menu-item ng-repeat="(sortID,sortInfo) in sort.sorts[sort.currentCategory]">
+				<md-button aria-label="{{sortInfo.text}}"
+					ng-bind="sortInfo.text"
+					ng-click="sort.setActive(sortID)"
+					ng-class="{'c-trans':true,'md-accent':sortID==sort.activeSort[sort.currentCategory]}" md-prevent-menu-close></md-button>
+			</md-menu-item>
+		</md-menu-content>
+	</md-menu>
+	<div ng-controller="loginController">
+		<md-list-item class="current-user" ng-show="ls.skynetUser.loggedIn" style="flex-grow:0;margin-left:12px;">
+			<img class="md-avatar" ng-src="https://image.eveonline.com/Character/{{ls.skynetUser.id}}_64.jpg">
+			<div class="md-list-item-text" ng-bind="ls.skynetUser.name"></div>
+			<md-button class="md-icon-button" ng-disabled="loggingOut" ng-click="logout()">
+				<md-icon>cancel</md-icon>
+				<md-tooltip>Log out</md-tooltip>
+			</md-button>
+		</md-list-item>
+		<md-button class="md-raised" style="margin-right:12px;" ng-hide="ls.skynetUser.loggedIn" href="login/">Login</md-button>
+	</div>
+</md-toolbar>
+<md-content layout="column" style="height:calc(100% - 64px);" ng-controller="fleet">
+	<md-tabs md-stretch-tabs="always" md-border-bottom md-swipe-content flex>
+		<md-tab label="Fleet info" md-on-select="sort.setCurrent()">
+			<md-content class="md-padding">
+				<div layout>
+					<md-input-container flex>
+						<label>Fleet ID/URL</label>
+						<input ng-model="ls.skynetFleetURL" ng-disabled="fleetInfo.active()">
+					</md-input-container>
+					<md-input-container>
+						<md-button class="md-primary md-raised" ng-click="start()" ng-disabled="fleetInfo.active()">Load</md-button>
+					</md-input-container>
+				</div>
+			</md-content>
+			<md-divider class="md-shrink" ng-show="fleetInfo.active()"></md-divider>
+			<md-content class="md-padding md-shrink" ng-show="fleetInfo.active()">
+				<p ng-bind="session.accessToken"></p>
+				<p>Fleet capacity: <span ng-class="{'red':fleetInfo.fleet.structure.count>0.8*fleetInfo.fleet.structure.capacity}">{{fleetInfo.fleet.structure.count}}/{{fleetInfo.fleet.structure.capacity}}</span></p>
+				<div>
+					<md-input-container>
+						<md-switch ng-model="fleetInfo.fleet.details.freemove" ng-change="updateFreemove()">Free-move enabled</md-switch>
+						<md-switch ng-model="fleetInfo.fleet.details.advert" ng-disabled="true">Fleet advert up</md-switch>
+						<md-switch ng-model="fleetInfo.fleet.details.voice" ng-disabled="true">Voice enabled</md-switch>
+					</md-input-container>
+				</div>
+				<div ng-controller="fleetInvite">
+					<md-autocomplete
+						md-floating-label="Invite"
+						md-search-text="queryText"
+						md-search-text-change="search()"
+						md-selected-item="selectedChar"
+						md-selected-item-change="inviteChar()"
+						md-items="char in matchedChars"
+						md-item-text="char.name"
+						md-delay="50">
+						<md-item-template>
+							<div layout style="align-items:center;">
+								<img ng-src="https://image.eveonline.com/Character/{{char.id}}_32.jpg" style="width:32px;height:32px;padding-right:8px;"> {{char.name}}
+							</div>
+						</md-item-template>
+						<md-not-found>Couldn't find any matching characters</md-not-found>
+					</md-autocomplete>
+				</div>
+			</md-content>
+		</md-tab>
+		<md-tab label="Composition" md-on-select="sort.setCurrent('composition')" ng-disabled="!fleetInfo.active()">
+			<md-list>
+				<div ng-repeat="systemID in fleetInfo.fleet.composition.systemList | orderBy:sort.active['composition'] track by systemID">
+					<md-list-item class="md-2-line">
+						<div class="md-list-item-text">
+							<h3 ng-bind="systemDetails(systemID)"></h3>
+							<h4>{{fleetInfo.fleet.composition[systemID].count}} {{fleetInfo.fleet.composition[systemID].count>1 ? "ships" : "ship"}}</h4>
+							<p ng-if="staticData.static.systems[systemID].jumps">{{staticData.static.systems[systemID].jumps}} jumps /
+								{{staticData.static.systems[systemID].ly|number:2}} LY away</p>
+						</div>
+					</md-list-item>
+					<md-divider></md-divider>
+					<md-list-item class="md-2-line" ng-repeat="classID in fleetInfo.fleet.composition[systemID].classList | orderBy:sort.f.shipClass">
+						<div class="md-list-item-text">
+							<h3>{{fleetInfo.fleet.composition[systemID].classes[classID].count}} {{fleetInfo.fleet.composition[systemID].classes[classID].count>1 ?
+								staticData.static.shipClasses[classID].namePlural : staticData.static.shipClasses[classID].name}}</h3>
+							<p>{{fleetInfo.fleet.composition[systemID].classes[classID].typeList.length}} ship
+								{{fleetInfo.fleet.composition[systemID].classes[classID].typeList.length>1 ? "types" : "type"}}</p>
+						</div>
+						<span flex></span>
+						<div ng-repeat="typeID in fleetInfo.fleet.composition[systemID].classes[classID].typeList | orderBy:sort.f.shipType" style="margin:12px 6px;">
+							{{fleetInfo.fleet.composition[systemID].classes[classID].types[typeID]}}x
+							<span>
+								<md-tooltip md-direction="left">{{staticData.static.ships[typeID].name}}</md-tooltip>
+								<img class="md-avatar" ng-src="https://image.eveonline.com/Type/{{typeID}}_64.png" style="border-radius:0;margin:0;">
+							</span>
+						</div>
+					</md-list-item>
+					<md-divider ng-if="!$last"></md-divider>
+				</div>
+			</md-list>
+		</md-tab>
+		<md-tab label="Structure" md-on-select="sort.setCurrent()" ng-disabled="!fleetInfo.active()">
+			<md-list>
+				<md-list-item class="md-2-line">
+					<div class="md-list-item-text">
+						<h3>Fleet</h3>
+						<h4 ng-if="fleetInfo.fleet.structure.commander">Fleet commander: {{memberSummary(fleetInfo.fleet.structure.commander)}}</h4>
+						<h4 ng-if="!fleetInfo.fleet.structure.commander">No fleet commander</h4>
+						<p>
+							{{fleetInfo.fleet.structure.wingCount==1 ? "1 wing" : fleetInfo.fleet.structure.wingCount+" wings"}},
+							{{fleetInfo.fleet.structure.count==1 ? "1 member" : fleetInfo.fleet.structure.count+" members"}}
+						</p>
+					</div>
+					<md-icon style="margin-left:12px;" ng-click="createWing()" ng-show="fleetInfo.fleet.structure.wingCount<5">add</md-icon>
+				</md-list-item>
+				<md-divider></md-divider>
+				<div ng-repeat="wing in fleetInfo.fleet.structure.wingList | orderBy track by wing">
+					<md-list-item class="md-2-line">
+						<div class="md-list-item-text" style="margin-left:32px;">
+							<h3>{{fleetInfo.fleet.structure.wings[wing].name}}</h3>
+							<h4 ng-if="fleetInfo.fleet.structure.wings[wing].commander">Wing commander: {{memberSummary(fleetInfo.fleet.structure.wings[wing].commander)}}</h4>
+							<h4 ng-if="!fleetInfo.fleet.structure.wings[wing].commander">No wing commander</h4>
+							<p>
+								{{fleetInfo.fleet.structure.wings[wing].squadCount==1 ? "1 squad" : fleetInfo.fleet.structure.wings[wing].squadCount+" squads"}},
+								{{fleetInfo.fleet.structure.wings[wing].count==1 ? "1 member" : fleetInfo.fleet.structure.wings[wing].count+" members"}}
+							</p>
+						</div>
+						<md-icon style="margin-left:12px;" ng-click="createSquad(wing)" ng-show="fleetInfo.fleet.structure.wings[wing].squadCount<5">add</md-icon>
+						<md-icon style="margin-left:12px;" ng-click="deleteWing(wing)" ng-show="fleetInfo.fleet.structure.wings[wing].count==0">delete</md-icon>
+						<md-icon style="margin-left:12px;">edit</md-icon>
+					</md-list-item>
+					<md-divider></md-divider>
+					<md-list-item class="md-2-line" ng-repeat="squad in fleetInfo.fleet.structure.wings[wing].squadList | orderBy track by squad">
+						<div class="md-list-item-text" style="margin:8px 0 8px 64px;">
+							<h3>{{fleetInfo.fleet.structure.squads[squad].name}}</h3>
+							<h4 ng-if="fleetInfo.fleet.structure.squads[squad].commander">Squad commander: {{memberSummary(fleetInfo.fleet.structure.squads[squad].commander)}}</h4>
+							<h4 ng-if="!fleetInfo.fleet.structure.squads[squad].commander">No squad commander</h4>
+							<h4>{{fleetInfo.fleet.structure.squads[squad].count==1 ? "1 member" : fleetInfo.fleet.structure.squads[squad].count+" members"}}</h4>
+							<p ng-if="structure.squads[squad].members.length==0"><em>No members</em></p>
+							<p ng-repeat="member in fleetInfo.fleet.structure.squads[squad].members | orderBy:sort.f.memberName" ng-bind="memberSummary(member)"></p>
+						</div>
+						<md-icon style="margin-left:12px;" ng-click="deleteSquad(wing,squad)" ng-show="fleetInfo.fleet.structure.squads[squad].count==0">delete</md-icon>
+						<md-icon style="margin-left:12px;">edit</md-icon>
+					</md-list-item>
+					<md-divider ng-if="!$last && fleetInfo.fleet.structure.wings[wing].squadList.length"></md-divider>
+				</div>
+			</md-list>
+		</md-tab>
+		<md-tab label="Member list" md-on-select="sort.setCurrent('members')" ng-disabled="!fleetInfo.active()">
+			<md-list>
+				<md-list-item class="md-2-line" ng-repeat="member in fleetInfo.fleet.memberList | orderBy:sort.sorts.members[sort.active.members].sort track by member">
+					<img class="md-avatar" ng-src="https://image.eveonline.com/Character/{{member}}_64.jpg" style="margin:16px 16px 16px 0;">
+					<div class="md-list-item-text">
+						<h3 ng-bind="fleetInfo.fleet.members[member].name"></h3>
+						<h4 ng-bind="systemDetails(fleetInfo.fleet.members[member].system)"></h4>
+						<p ng-show="!staticData.static.systems[fleetInfo.fleet.members[member].system].jumps && fleetInfo.fleet.member.docked">Docked</p>
+						<p ng-show="staticData.static.systems[fleetInfo.fleet.members[member].system].jumps"><span ng-show="fleetInfo.fleet.members[member].docked">Docked, </span>{{staticData.static.systems[fleetInfo.fleet.members[member].system].jumps}}
+							jumps /
+							{{staticData.static.systems[fleetInfo.fleet.members[member].system].ly|number:2}} LY away</p>
+					</div>
+					<span flex></span>
+					<div class="md-list-item-text" style="flex-grow:0;text-align:right;">
+						<h3 ng-bind="staticData.static.ships[fleetInfo.fleet.members[member].ship].name"></h3>
+						<h4 ng-bind="staticData.static.shipClasses[staticData.static.ships[fleetInfo.fleet.members[member].ship].class].name"></h4>
+					</div>
+					<img class="md-avatar" ng-src="https://image.eveonline.com/Type/{{fleetInfo.fleet.members[member].ship}}_64.png" style="border-radius:0;margin:16px;">
+					<md-icon class="md-primary" ng-click="kickMember(member,$event)">close</md-icon>
+					<md-divider ng-if="!$last"></md-divider>
+				</md-list-item>
+			</md-list>
+		</md-tab>
+		<md-tab label="About" md-on-select="sort.setCurrent()">
+			<md-content class="md-padding">
+				<p>TAABE Skynet is fleet manager/assistant with an ever-expanding feature set! To see the list of existing and planned features, and make suggestions and bug
+					reports go <a href="https://docs.google.com/document/d/1l3shsXQHYSnSoAQ9PC5yP3hv9MwmelAI9WBtI4vt68g/edit?usp=sharing">here</a>, for complaints go
+					<a href="https://beta.taabe.xyz/">here</a>.</p>
+				<p>This tool was developed by <a href="https://taabe.xyz/staff/carbon/">Carbon Alabel</a>. Donations are accepted in the form of ISK, fitted ships, unfitted ships,
+					PLEX, skill injectors, SKINs, drugs, money, coal, precious metals, sexual favours (donations of any kind, really) and very much appreciated.</p>
+				<p>&copy; 2016 Carbon Alabel, all rights reserved<br>The developer takes no responsibility for any kind of damage or information leaks caused by the use of this
+					tool.<br>If tool develops sentience, keep calm and accept your fate.</p>
+				<p>All EVE Online related materials are property of <a href="https://www.ccpgames.com/">CCP Games</a>.</p>
+			</md-content>
+		</md-tab>
+	</md-tabs>
+</md-content>
+</body>
+</html>

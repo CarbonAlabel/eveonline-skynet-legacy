@@ -1,0 +1,12 @@
+md-tab-item>span,.c-trans{
+	transition:color 150ms;
+}
+.red{
+	color:red;
+}
+.md-shrink{
+	transition:transform 300ms ease-in-out;
+}
+.md-shrink.ng-hide{
+	transform:scale(0);
+}
